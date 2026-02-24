@@ -1,0 +1,124 @@
+name: Partner Collaboration / Access Request
+description: Request access to collaborate with Panacea Financial engineering teams.
+title: "[Access Request]: <Company Name> - <Full Name>"
+labels:
+  - access-request
+  - triage
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for your interest in collaborating with Panacea Financial.
+
+        This form is for approved implementation partners, vendors, and consultants
+        who require GitHub organization or repository access.
+
+        All requests are reviewed by our engineering and security teams.
+
+  - type: input
+    id: full_name
+    attributes:
+      label: Full Name
+      placeholder: Jane Smith
+    validations:
+      required: true
+
+  - type: input
+    id: email
+    attributes:
+      label: Business Email Address
+      description: Must be from an approved partner domain.
+      placeholder: jane.smith@company.com
+    validations:
+      required: true
+
+  - type: input
+    id: github_username
+    attributes:
+      label: GitHub Username
+      description: Your GitHub handle (for example, janesmith)
+      placeholder: janesmith
+    validations:
+      required: true
+
+  - type: input
+    id: company
+    attributes:
+      label: Company / Organization
+      placeholder: Implementation Partner LLC
+    validations:
+      required: true
+
+  - type: dropdown
+    id: relationship_type
+    attributes:
+      label: Relationship to Panacea
+      options:
+        - Implementation Partner
+        - Technology Vendor
+        - Security / Compliance Consultant
+        - Engineering Consultant
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: panacea_sponsor_github
+    attributes:
+      label: Panacea Business Sponsor (GitHub Username)
+      description: Enter the sponsor's GitHub username in PanaceaFi (for example, johndoe or @johndoe).
+      placeholder: johndoe
+    validations:
+      required: true
+
+  - type: textarea
+    id: access_scope
+    attributes:
+      label: Requested Access Scope
+      description: Specify organization-level access or list specific repositories.
+      placeholder: |
+        - Repository: panacea-dataplatform
+        - Repository: panacea-empower
+        - Org-level read access
+    validations:
+      required: true
+
+  - type: dropdown
+    id: access_level
+    attributes:
+      label: Requested Permission Level
+      options:
+        - Read
+        - Triage
+        - Write
+        - Maintain
+    validations:
+      required: true
+
+  - type: textarea
+    id: business_justification
+    attributes:
+      label: Business Justification
+      description: Brief explanation of why this access is required.
+      placeholder: Supporting Q2 Empower deployment initiative.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: compliance_acknowledgment
+    attributes:
+      label: Compliance Acknowledgment
+      options:
+        - label: I understand that access is subject to security review and may be revoked at any time.
+          required: true
+        - label: I confirm I am authorized by my organization to request this access.
+          required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        Panacea Financial operates under a security-first, least-privilege access model.
+        Access will be provisioned only after review and approval.

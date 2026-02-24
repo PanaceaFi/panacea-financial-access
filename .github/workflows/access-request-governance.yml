@@ -1,0 +1,176 @@
+name: Access Request Governance
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate-and-govern:
+    if: contains(github.event.issue.labels.*.name, 'access-request')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate request and apply governance controls
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || "";
+            const marker = "<!-- access-request-governance -->";
+            const org = context.repo.owner;
+            const teamMentions = [`@${org}/panacea-data-ai-ops`, `@${org}/it-security-and-compliance`];
+            const allowedDomains = (
+              process.env.ALLOWED_EMAIL_DOMAINS
+                ? process.env.ALLOWED_EMAIL_DOMAINS.split(",")
+                : ["panaceafinancial.com", "panacea.org", "amiadata.com"]
+            ).map((domain) => domain.trim().toLowerCase()).filter(Boolean);
+
+            function escapeRegex(value) {
+              return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            }
+
+            function readField(label) {
+              const pattern = new RegExp(`###\\s*${escapeRegex(label)}\\s*\\n([\\s\\S]*?)(?=\\n###\\s|$)`, "i");
+              const match = body.match(pattern);
+              if (!match) return "";
+              const value = match[1].trim();
+              if (!value || value.toLowerCase() === "_no response_") return "";
+              return value;
+            }
+
+            function normalizeUsername(value) {
+              return value.replace(/^@/, "").trim().split(/\s+/)[0];
+            }
+
+            const requiredLabels = [
+              "Full Name",
+              "Business Email Address",
+              "GitHub Username",
+              "Company / Organization",
+              "Relationship to Panacea",
+              "Panacea Business Sponsor (GitHub Username)",
+              "Requested Access Scope",
+              "Requested Permission Level",
+              "Business Justification",
+            ];
+
+            const missingFields = requiredLabels.filter((label) => !readField(label));
+            const email = readField("Business Email Address").toLowerCase();
+            const sponsorInput = readField("Panacea Business Sponsor (GitHub Username)");
+            const sponsor = normalizeUsername(sponsorInput);
+
+            let emailValid = false;
+            let emailReason = "No email submitted.";
+            if (email) {
+              const emailParts = email.split("@");
+              if (emailParts.length === 2) {
+                const domain = emailParts[1].trim();
+                emailValid = allowedDomains.includes(domain);
+                emailReason = emailValid
+                  ? `Approved domain: ${domain}.`
+                  : `Domain '${domain}' is not in the approved list.`;
+              } else {
+                emailReason = "Email format is invalid.";
+              }
+            }
+
+            let sponsorValid = false;
+            let sponsorReason = "No sponsor submitted.";
+            if (sponsor) {
+              try {
+                await github.rest.orgs.checkMembershipForUser({
+                  org,
+                  username: sponsor,
+                });
+                sponsorValid = true;
+                sponsorReason = `@${sponsor} is a member of ${org}.`;
+              } catch (error) {
+                sponsorReason = `@${sponsor} is not a member of ${org} or is not visible to this token.`;
+              }
+            }
+
+            const shouldClose = missingFields.length > 0 || !sponsorValid;
+
+            const checklistBody = [
+              marker,
+              "### Access Request Governance",
+              "",
+              `**Notification:** ${teamMentions.join(" ")}`,
+              "",
+              "#### Validation Results",
+              `- Sponsor validation: ${sponsorValid ? "PASS" : "FAIL"} - ${sponsorReason}`,
+              `- Email domain validation: ${emailValid ? "PASS" : "MANUAL REVIEW"} - ${emailReason}`,
+              missingFields.length
+                ? `- Required fields check: FAIL - Missing: ${missingFields.join(", ")}`
+                : "- Required fields check: PASS",
+              "",
+              "### Security Review Checklist",
+              "- [ ] Business sponsor verified as Panacea org member",
+              "- [ ] Email domain validated",
+              "- [ ] Least-privilege access confirmed",
+              "- [ ] Repositories scoped appropriately",
+              "- [ ] Approval from IT Security",
+              "",
+              "Access must not be provisioned until all boxes are checked.",
+            ].join("\n");
+
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo,
+              issue_number: issue.number,
+              per_page: 100,
+            });
+
+            const existingComment = comments.find(
+              (comment) =>
+                comment.user &&
+                comment.user.type === "Bot" &&
+                typeof comment.body === "string" &&
+                comment.body.includes(marker),
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                ...context.repo,
+                comment_id: existingComment.id,
+                body: checklistBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: issue.number,
+                body: checklistBody,
+              });
+            }
+
+            const labelsToAdd = ["security-review"];
+            await github.rest.issues.addLabels({
+              ...context.repo,
+              issue_number: issue.number,
+              labels: labelsToAdd,
+            });
+
+            if (shouldClose && issue.state !== "closed") {
+              const closeReason = missingFields.length
+                ? "Request auto-closed because required fields were missing."
+                : "Request auto-closed because sponsor validation failed.";
+
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: issue.number,
+                body: `${closeReason}\n\nPlease submit a new access request with complete and valid information.`,
+              });
+
+              await github.rest.issues.update({
+                ...context.repo,
+                issue_number: issue.number,
+                state: "closed",
+                state_reason: "not_planned",
+              });
+            }
+        env:
+          ALLOWED_EMAIL_DOMAINS: ${{ vars.ACCESS_REQUEST_ALLOWED_EMAIL_DOMAINS }}
