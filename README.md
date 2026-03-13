@@ -30,6 +30,7 @@ Incomplete or unverified requests may be closed without action.
 
 ## Who Should Use This
 
+- New team members
 - Approved implementation partners
 - Technology vendors
 - Engineering consultants
